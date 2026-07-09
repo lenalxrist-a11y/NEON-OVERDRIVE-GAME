@@ -498,26 +498,19 @@ function handleServerMsg(msg){
       break;
 
     case 'partyCreated':
+      // Just show the code — leader stays in lobby and hits PLAY when ready
       myPartyCode = msg.code;
-      // Show code in lobby
       document.getElementById('party-code-box').style.display = 'block';
       document.getElementById('party-code-text').innerText = msg.code;
-      document.getElementById('party-members').innerText = 'Waiting for friends... (1/4)';
-      // Enter game session immediately (leader waits in-game)
-      myId      = msg.playerId;
-      roomId    = msg.roomId;
-      myMode    = msg.mode;
-      myWinGoal = msg.winGoal;
-      worldW    = msg.worldW || 1280;
-      worldH    = msg.worldH || 720;
-      withBots  = msg.withBots;
-      localPositionSnapped = false;
-      enterGameFromParty();
+      document.getElementById('party-members').innerText = 'Waiting for friends... (0/3 joined)';
+      withBots = msg.withBots;
+      // Pre-select the right mode
+      setMode(msg.mode);
       break;
 
     case 'partyJoined':
+      // Friend entered — go straight into the game
       myPartyCode = msg.code;
-      // Enter game session immediately
       myId      = msg.playerId;
       roomId    = msg.roomId;
       myMode    = msg.mode;
@@ -533,12 +526,10 @@ function handleServerMsg(msg){
       showJoinError(msg.msg || 'Error joining party.');
       break;
     case 'partyUpdate':
-      // Update counter wherever it's visible
       const pmEl = document.getElementById('party-members');
-      if (pmEl) pmEl.innerText = `Players in party: ${msg.count}/${msg.max}`;
-      // Also update in-game player count display
+      if (pmEl) pmEl.innerText = `Players ready: ${msg.count}/4`;
       const poEl = document.getElementById('players-online');
-      if (poEl) poEl.innerText = `Party: ${msg.count}/${msg.max} players`;
+      if (poEl) poEl.innerText = `Party: ${msg.count}/4 players`;
       break;
     case 'playerJoined':
       showAlert(`⬡ ${msg.name} joined!`);
