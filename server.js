@@ -330,8 +330,18 @@ wss.on('connection', ws => {
       room.partyOnly = true;
       parties.set(code, { leaderId: clientId, roomId: room.id, mode, withBots });
       info.partyCode = code;
-      ws.send(JSON.stringify({ type:'partyCreated', code, mode, withBots }));
-      console.log(`[PARTY] Created ${code} — mode:${mode} bots:${withBots}`);
+      // Leader immediately enters the room
+      const name = (msg.name || 'Player').slice(0, 20);
+      const startX = 200 + Math.random() * (WORLD.W - 400);
+      const startY = 200 + Math.random() * (WORLD.H - 400);
+      const player = defaultPlayer(clientId, name, startX, startY, mode);
+      room.players.set(clientId, player);
+      info.roomId = room.id;
+      ws.send(JSON.stringify({ type:'partyCreated', code, mode, withBots,
+        playerId: clientId, roomId: room.id, winGoal: room.winGoal,
+        worldW: WORLD.W, worldH: WORLD.H }));
+      broadcast(room, { type:'partyUpdate', count: room.players.size, max: MAX_ROOM });
+      console.log(`[PARTY] Created ${code} by ${name} — mode:${mode} bots:${withBots}`);
     }
 
     // ── JOIN PARTY ────────────────────────────────────────────
@@ -340,36 +350,41 @@ wss.on('connection', ws => {
       const party = parties.get(code);
       if (!party) { ws.send(JSON.stringify({ type:'partyError', msg:'Invalid code. Check and try again.' })); return; }
       const room = rooms.get(party.roomId);
-      if (!room || room.over) { ws.send(JSON.stringify({ type:'partyError', msg:'That party has already started or ended.' })); return; }
+      if (!room || room.over) { ws.send(JSON.stringify({ type:'partyError', msg:'That party has already ended.' })); return; }
       if (room.players.size >= MAX_ROOM) { ws.send(JSON.stringify({ type:'partyError', msg:'Party is full (max 4 players).' })); return; }
+      // Immediately add this player to the room
+      const name = (msg.name || 'Player').slice(0, 20);
+      const startX = 200 + Math.random() * (WORLD.W - 400);
+      const startY = 200 + Math.random() * (WORLD.H - 400);
+      const player = defaultPlayer(clientId, name, startX, startY, party.mode);
+      room.players.set(clientId, player);
       info.partyCode = code;
-      ws.send(JSON.stringify({ type:'partyJoined', code, mode:party.mode, withBots:party.withBots }));
-      console.log(`[PARTY] ${clientId} joined party ${code}`);
+      info.roomId    = room.id;
+      ws.send(JSON.stringify({ type:'partyJoined', code, mode: party.mode, withBots: party.withBots,
+        playerId: clientId, roomId: room.id, winGoal: room.winGoal,
+        worldW: WORLD.W, worldH: WORLD.H }));
+      broadcast(room, { type:'playerJoined', id: clientId, name });
+      broadcast(room, { type:'partyUpdate', count: room.players.size, max: MAX_ROOM });
+      console.log(`[PARTY] ${name} joined party ${code} — ${room.players.size} players`);
     }
 
-    // ── JOIN GAME ─────────────────────────────────────────────
+    // ── JOIN GAME (public matchmaking only — party users skip this) ──
     if (msg.type === 'join') {
+      // If already in a room via party, skip
+      if (info.roomId) return;
       const mode     = msg.mode     || 'SOLO';
       const withBots = !!msg.withBots;
       const name     = (msg.name || 'Player').slice(0, 20);
-      let room;
-      if (info.partyCode) {
-        const party = parties.get(info.partyCode);
-        room = party ? rooms.get(party.roomId) : null;
-        if (!room) { room = findPublicRoom(mode, withBots); }
-      } else {
-        room = findPublicRoom(mode, withBots);
-      }
-      const startX = 200 + Math.random() * (WORLD.W - 400);
-      const startY = 200 + Math.random() * (WORLD.H - 400);
-      const player = defaultPlayer(clientId, name, startX, startY, mode);
+      const room     = findPublicRoom(mode, withBots);
+      const startX   = 200 + Math.random() * (WORLD.W - 400);
+      const startY   = 200 + Math.random() * (WORLD.H - 400);
+      const player   = defaultPlayer(clientId, name, startX, startY, mode);
       room.players.set(clientId, player);
       info.roomId = room.id;
       ws.send(JSON.stringify({ type:'joined', playerId:clientId, roomId:room.id, mode, winGoal:room.winGoal, worldW:WORLD.W, worldH:WORLD.H, withBots }));
       broadcast(room, { type:'playerJoined', id:clientId, name });
-      // Tell everyone how many players are in the party
       broadcast(room, { type:'partyUpdate', count: room.players.size, max: MAX_ROOM });
-      console.log(`[+] ${name} joined room ${room.id} (${mode} bots:${withBots}) — ${room.players.size} players`);
+      console.log(`[+] ${name} joined public room ${room.id} (${mode}) — ${room.players.size} players`);
     }
 
     // ── INPUT ─────────────────────────────────────────────────
