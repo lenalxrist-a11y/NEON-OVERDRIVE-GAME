@@ -11,7 +11,10 @@ const wss    = new WebSocketServer({ server });
 const PORT = process.env.PORT || 3000;
 
 // Serve the game client
-app.use(express.static(path.join(__dirname, 'public')));
+const fs = require('fs');
+const publicDir = path.join(__dirname, 'public');
+const staticDir = fs.existsSync(publicDir) ? publicDir : __dirname;
+app.use(express.static(staticDir));
 
 // ── GAME STATE ──────────────────────────────────────────────────
 const TICK_RATE    = 20;   // server ticks per second
