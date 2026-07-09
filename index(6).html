@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Neon Overdrive — Multiplayer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{overflow:hidden;background:#05050a;font-family:monospace;color:#fff;user-select:none}
+canvas{display:block;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1}
+
+/* ── LOBBY ── */
+#lobby{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(ellipse at 50% 40%,#1a0533 0%,#050510 100%)}
+#lobby-topbar{display:flex;align-items:center;gap:4px;padding:10px 20px;background:rgba(0,0,0,0.55);border-bottom:1px solid rgba(255,255,255,0.06)}
+.lb-nav{background:transparent;border:none;color:rgba(255,255,255,0.7);font-size:13px;font-weight:700;letter-spacing:1px;padding:8px 16px;cursor:default;border-radius:4px;font-family:inherit;text-transform:uppercase}
+.lb-nav.active{background:rgba(255,255,255,0.15);color:#fff}
+#lb-player-area{margin-left:auto;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px}
+#lb-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#00ffcc,#ff00ff);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0}
+#lb-pname{font-size:13px;font-weight:700;color:#fff}
+#lb-plevel{font-size:11px;color:rgba(255,255,255,0.45)}
+#lobby-main{flex:1;position:relative;display:flex;align-items:flex-end}
+#lobby-char{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);font-size:110px;animation:charFloat 3s ease-in-out infinite;filter:drop-shadow(0 0 30px rgba(0,200,255,0.4))}
+#lobby-glow{position:absolute;bottom:82px;left:50%;transform:translateX(-50%);width:160px;height:36px;background:radial-gradient(ellipse,rgba(0,200,255,0.5),transparent 70%);border-radius:50%;animation:glowPulse 2s ease-in-out infinite}
+@keyframes charFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-12px)}}
+@keyframes glowPulse{0%,100%{opacity:0.5}50%{opacity:1}}
+#lobby-left{position:absolute;bottom:90px;left:0;width:290px;background:rgba(10,10,20,0.92);border-top:1px solid rgba(255,255,255,0.08);border-right:1px solid rgba(255,255,255,0.08);padding:14px 0 16px;display:flex;flex-direction:column;max-height:calc(100vh - 130px);overflow-y:auto}
+#lb-game-title{padding:0 22px 12px;font-size:17px;font-weight:900;color:#fff;letter-spacing:1px;text-transform:uppercase;font-style:italic;line-height:1.3}
+.lb-mode{padding:7px 22px;font-size:13px;font-weight:700;color:rgba(255,255,255,0.55);cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:4px;margin:0 6px;transition:0.15s}
+.lb-mode:hover{background:rgba(255,255,255,0.07);color:#fff}
+.lb-mode.sel{background:rgba(255,255,255,0.1);color:#fff}
+#lb-name-wrap{padding:10px 18px 4px;display:flex;flex-direction:column;gap:4px}
+#lb-name-wrap label{font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:2px}
+#lb-name-input{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:7px 10px;font-size:13px;font-weight:600;border-radius:4px;font-family:inherit;width:100%}
+#lb-name-input:focus{outline:none;border-color:rgba(255,255,255,0.4)}
+#lb-play-btn{margin:10px 18px 0;background:#f5c518;color:#000;border:none;padding:12px;font-size:18px;font-weight:900;letter-spacing:2px;cursor:pointer;border-radius:6px;font-family:inherit;width:calc(100% - 36px);transition:0.15s;box-shadow:0 4px 20px rgba(245,197,24,0.4)}
+#lb-play-btn:hover{background:#ffd740;transform:translateY(-1px)}
+#lb-rank-row{margin:14px 18px 0;display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px;border-radius:6px;transition:0.15s}
+#lb-rank-row:hover{background:rgba(255,255,255,0.06)}
+#lb-rank-icon{font-size:24px}
+#lb-rank-info{flex:1}
+#lb-rank-name{font-size:12px;font-weight:700;color:#ff00ff;letter-spacing:1px}
+#lb-rank-xp{font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px}
+#lobby-carousel{position:absolute;bottom:0;left:0;right:0;height:90px;background:rgba(0,0,0,0.75);border-top:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:4px;padding:0 4px;overflow:hidden}
+.lc-item{flex-shrink:0;width:72px;height:72px;border-radius:6px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:0.2s;position:relative}
+.lc-item:hover{border-color:rgba(255,255,255,0.3);transform:translateY(-3px)}
+.lc-item-icon{font-size:28px}
+.lc-new{position:absolute;bottom:3px;right:3px;background:#f5c518;color:#000;font-size:7px;font-weight:900;padding:1px 4px;border-radius:2px}
+
+/* ── CHECKING / LOADING ── */
+#check-screen{display:none;position:fixed;inset:0;background:#000;z-index:35;flex-direction:column;align-items:center;justify-content:center}
+#check-screen.open{display:flex}
+#check-title{font-size:26px;font-weight:900;color:#fff;letter-spacing:3px;margin-bottom:28px}
+#check-log{width:520px;max-width:90vw;background:#080808;border:1px solid #222;border-radius:8px;padding:16px 20px;font-size:12px;color:#00ff88;min-height:190px;line-height:1.9;white-space:pre-wrap;overflow-y:auto}
+#check-bar-wrap{width:520px;max-width:90vw;height:5px;background:#1a1a1a;border-radius:3px;margin-top:12px;overflow:hidden}
+#check-bar{height:100%;width:0%;background:linear-gradient(90deg,#00ff88,#00ffff);border-radius:3px;transition:width 0.3s}
+#check-status{font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;letter-spacing:2px}
+#loading-screen{display:none;position:fixed;inset:0;z-index:36;flex-direction:column;overflow:hidden}
+#loading-screen.open{display:flex}
+#loading-art{position:absolute;inset:0;background:linear-gradient(135deg,#0a0520,#1a0840 35%,#0d1535 65%,#050a15)}
+#loading-art::before{content:'';position:absolute;top:-20%;left:-10%;width:70%;height:70%;background:radial-gradient(ellipse,rgba(255,100,20,0.12),rgba(180,50,200,0.08) 40%,transparent 70%);border-radius:50%}
+#loading-art::after{content:'';position:absolute;top:10%;right:10%;width:300px;height:300px;background:radial-gradient(circle,rgba(255,220,100,0.2),rgba(0,100,255,0.12) 40%,transparent 70%);border-radius:50%;animation:loadGlow 3s ease-in-out infinite}
+@keyframes loadGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
+#load-entities{position:absolute;inset:0;pointer-events:none}
+#loading-bottom{position:absolute;bottom:0;left:0;right:0;padding:24px 40px}
+#load-connecting{font-size:22px;font-weight:900;color:#fff;letter-spacing:2px;margin-bottom:14px}
+#load-bar-wrap{width:260px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden}
+#load-bar{height:100%;width:0%;background:linear-gradient(90deg,#6644ff,#ff44aa);border-radius:2px;transition:width 0.4s}
+#load-tip-box{position:absolute;bottom:30px;right:40px;left:40%;max-width:480px}
+#load-tip-label{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-bottom:5px}
+#load-tip-text{font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6}
+#load-close-btn{position:absolute;bottom:22px;right:32px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;border-radius:4px;font-family:inherit;letter-spacing:1px;display:none}
+#load-close-btn.show{display:block}
+
+/* ── HUD ── */
+#hud{display:none;position:fixed;top:15px;left:15px;background:rgba(10,10,20,0.88);padding:12px;border-radius:6px;border:1px solid #ff00aa;pointer-events:none;z-index:10;min-width:210px}
+#hud.show{display:block}
+.bar-container{width:160px;height:11px;background:#222;border:1px solid #444;margin-top:3px;border-radius:3px;overflow:hidden}
+.bar{height:100%;transition:width 0.1s}
+/* scoreboard */
+#scoreboard{display:none;position:fixed;top:15px;right:15px;background:rgba(10,10,20,0.88);padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);z-index:10;min-width:180px}
+#scoreboard.show{display:block}
+.sb-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.sb-row:last-child{border:none}
+.sb-you{color:#00ffff;font-weight:bold}
+/* chat */
+#chat-wrap{position:fixed;bottom:100px;left:15px;z-index:10;display:none;flex-direction:column;gap:4px;width:280px}
+#chat-wrap.show{display:flex}
+#chat-log{display:flex;flex-direction:column;gap:3px;max-height:120px;overflow:hidden;justify-content:flex-end}
+.chat-msg{background:rgba(0,0,0,0.65);padding:4px 8px;border-radius:4px;font-size:12px;animation:fadeMsg 8s forwards}
+@keyframes fadeMsg{0%{opacity:1}80%{opacity:1}100%{opacity:0}}
+#chat-input-row{display:flex;gap:6px}
+#chat-input{background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:6px 8px;font-size:12px;border-radius:4px;flex:1;font-family:inherit;display:none}
+#chat-input.open{display:block}
+
+/* ── ALERTS ── */
+#loot-alert{position:fixed;bottom:15%;left:50%;transform:translateX(-50%);background:rgba(255,0,170,0.85);border:2px solid #00ffff;padding:10px 26px;border-radius:8px;color:#fff;font-weight:bold;font-size:16px;display:none;pointer-events:none;z-index:40;white-space:nowrap}
+#reload-hint{position:fixed;bottom:8%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);border:1px solid #ffaa00;padding:7px 20px;border-radius:6px;color:#ffaa00;font-size:14px;font-weight:bold;display:none;pointer-events:none;z-index:40}
+#net-status{position:fixed;top:8px;right:8px;font-size:11px;padding:4px 10px;border-radius:4px;z-index:50;pointer-events:none;display:none}
+#net-status.show{display:block}
+#net-status.ok{background:rgba(0,255,100,0.15);color:#00ff64;border:1px solid #00ff6444}
+#net-status.bad{background:rgba(255,50,50,0.2);color:#ff5050;border:1px solid #ff505044}
+
+/* ── RESULT ── */
+#result-screen{display:none;position:fixed;inset:0;z-index:25;justify-content:center;align-items:center;flex-direction:column;background:radial-gradient(ellipse at 50% 40%,#0a1a4a,#03080f)}
+#result-screen.open{display:flex}
+.rs-stats{display:flex;align-items:center;gap:80px;margin-bottom:24px}
+.rs-stat{text-align:center;animation:rsFade 0.5s ease both}
+.rs-stat:nth-child(1){animation-delay:.2s}
+.rs-stat:nth-child(3){animation-delay:.4s}
+.rs-stat-num{font-size:64px;font-weight:900;color:#fff;line-height:1}
+.rs-stat-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.45);letter-spacing:3px;margin-top:5px}
+#rs-ring-wrap{position:relative;width:180px;height:180px;flex-shrink:0}
+#rs-ring-svg{width:180px;height:180px;transform:rotate(-90deg)}
+#rs-ring-bg{fill:none;stroke:rgba(255,255,255,0.08);stroke-width:9}
+#rs-ring-fill{fill:none;stroke:url(#ringGrad2);stroke-width:9;stroke-linecap:round;stroke-dasharray:508;stroke-dashoffset:508;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1) .3s}
+#rs-ring-inner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+#rs-rank-icon-big{font-size:52px;display:block;animation:rsPop .5s cubic-bezier(.34,1.56,.64,1) .5s both}
+.rs-bottom{text-align:center;margin-top:8px;animation:rsFade .5s ease .8s both}
+#rs-pct{font-size:26px;font-weight:900;color:#fff}
+#rs-rankup-text{font-size:20px;font-weight:900;color:#00c8ff;letter-spacing:3px;text-shadow:0 0 14px #00c8ff;margin:3px 0;animation:rsPulse 1s ease-in-out infinite;display:none}
+#rs-rank-name-text{font-size:34px;font-weight:900;color:#fff;letter-spacing:2px;font-style:italic}
+#rs-xp-earned{font-size:12px;color:rgba(255,255,255,0.35);letter-spacing:2px;margin-top:5px}
+#rs-continue-btn{position:absolute;bottom:28px;right:36px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.22);color:#fff;padding:9px 20px;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;font-family:monospace;border-radius:4px}
+#rs-continue-btn:hover{background:rgba(255,255,255,0.16)}
+@keyframes rsFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes rsPop{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes rsPulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ── RANK MODAL ── */
+#rank-modal{display:none;position:fixed;inset:0;background:rgba(0,0,10,0.92);z-index:60;justify-content:center;align-items:center}
+#rank-modal.open{display:flex}
+#rank-panel{background:#07070f;border:2px solid #ffaa00;box-shadow:0 0 40px #ffaa0055;border-radius:14px;padding:28px 32px;width:460px;max-width:94vw;text-align:center}
+#rank-title{color:#ffaa00;font-size:22px;font-weight:900;letter-spacing:3px;margin-bottom:3px}
+#rank-subtitle{color:#664400;font-size:10px;letter-spacing:2px;margin-bottom:18px}
+#rank-current-display{margin-bottom:16px;padding:12px;background:#0d0020;border:1px solid #ff00ff;border-radius:8px}
+#rank-cur-icon{font-size:44px;margin-bottom:3px}
+#rank-cur-name{font-size:18px;font-weight:900;color:#ff00ff;letter-spacing:2px}
+#rank-cur-xp{font-size:11px;color:#664488;margin-top:3px}
+.rank-list{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
+.rank-row{display:flex;align-items:center;gap:10px;background:#0d0015;border:1px solid #330033;border-radius:7px;padding:9px 12px}
+.rank-row.current{border:2px solid #ffaa00;box-shadow:0 0 12px #ffaa0055;background:#1a0d00}
+.rank-row.achieved{opacity:.65}
+.rank-icon{font-size:24px;min-width:32px;text-align:center}
+.rank-info{flex:1;text-align:left}
+.rank-name{font-size:13px;font-weight:bold;color:#fff}
+.rank-req{font-size:9px;color:#664466;margin-top:1px}
+.rank-xp-bar-wrap{height:3px;background:#220033;border-radius:2px;margin-top:4px;overflow:hidden}
+.rank-xp-bar{height:100%;background:linear-gradient(90deg,#ff00ff,#ffaa00);border-radius:2px}
+.rank-badge{font-size:9px;font-weight:bold;padding:2px 7px;border-radius:8px}
+.rank-badge.unlocked{background:#ffaa00;color:#000}
+.rank-badge.locked{background:#220022;color:#440044;border:1px solid #330033}
+.rank-badge.active{background:#ff00ff;color:#fff;box-shadow:0 0 7px #ff00ff}
+#rank-close-btn{background:#ffaa00;color:#000;border:none;padding:9px 28px;font-size:15px;font-weight:bold;border-radius:6px;cursor:pointer;font-family:monospace;box-shadow:0 0 10px #ffaa00}
+</style>
+</head>
+<body>
+
+<!-- NET STATUS -->
+<div id="net-status">● CONNECTED</div>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div id="lobby-topbar">
+    <button class="lb-nav active">PLAY</button>
+    <button class="lb-nav">SHOP</button>
+    <button class="lb-nav">LOCKER</button>
+    <button class="lb-nav">PASSES</button>
+    <button class="lb-nav">QUESTS</button>
+    <button class="lb-nav">COMPETE</button>
+    <button class="lb-nav">CAREER</button>
+    <div id="lb-player-area">
+      <div id="lb-avatar">N</div>
+      <div>
+        <div id="lb-pname">NiceNick15</div>
+        <div id="lb-plevel">LVL <span id="lb-lvl">1</span></div>
+      </div>
+    </div>
+  </div>
+  <div id="lobby-main">
+    <div id="lobby-glow"></div>
+    <div id="lobby-char">🥷</div>
+    <div id="lobby-left">
+      <div id="lb-game-title">NEON OVERDRIVE<br><span style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.45);font-style:normal;letter-spacing:2px">CHAOS MOD · MULTIPLAYER</span></div>
+      <div id="lb-modes">
+        <div class="lb-mode sel" id="lmo-solo"   onclick="setMode('SOLO')">  ⬡ &nbsp;Solo &nbsp;<span style="opacity:.4;font-size:10px">[30 kills]</span></div>
+        <div class="lb-mode"    id="lmo-duos"   onclick="setMode('DUOS')">  ⬡⬡ Duos &nbsp;<span style="opacity:.4;font-size:10px">[300 kills]</span></div>
+        <div class="lb-mode"    id="lmo-trios"  onclick="setMode('TRIOS')"> ⬡⬡⬡ Trios &nbsp;<span style="opacity:.4;font-size:10px">[3k kills]</span></div>
+        <div class="lb-mode"    id="lmo-quads"  onclick="setMode('SQUADS')">☢ Squads &nbsp;<span style="opacity:.4;font-size:10px">[30k kills]</span></div>
+      </div>
+      <div id="lb-name-wrap">
+        <label>YOUR NAME</label>
+        <input id="lb-name-input" maxlength="20" value="NiceNick15" spellcheck="false">
+      </div>
+
+      <!-- BOT / HUMAN TOGGLE -->
+      <div style="padding:8px 18px 0;display:flex;align-items:center;gap:8px">
+        <div id="lb-toggle-wrap" style="display:flex;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;overflow:hidden;flex:1">
+          <button id="tb-humans" onclick="setWithBots(false)" style="flex:1;padding:7px 4px;font-size:11px;font-weight:700;letter-spacing:1px;border:none;cursor:pointer;font-family:inherit;background:#f5c518;color:#000;transition:0.15s">👥 HUMANS</button>
+          <button id="tb-bots"   onclick="setWithBots(true)"  style="flex:1;padding:7px 4px;font-size:11px;font-weight:700;letter-spacing:1px;border:none;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.5);transition:0.15s">🤖 WITH BOTS</button>
+        </div>
+      </div>
+
+      <!-- PARTY SECTION -->
+      <div style="padding:10px 18px 0">
+        <div style="font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-bottom:6px">PARTY</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="createParty()" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:8px 4px;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:5px;font-family:inherit;transition:0.15s" onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.07)'">＋ CREATE</button>
+          <button onclick="showJoinParty()" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:8px 4px;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:5px;font-family:inherit;transition:0.15s" onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.07)'">⬡ JOIN</button>
+        </div>
+        <!-- Party code display (shown after creating) -->
+        <div id="party-code-box" style="display:none;margin-top:8px;background:rgba(0,200,100,0.08);border:1px solid rgba(0,200,100,0.3);border-radius:6px;padding:9px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:3px">YOUR PARTY CODE</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div id="party-code-text" style="font-size:22px;font-weight:900;color:#00ff88;letter-spacing:4px;font-family:monospace">------</div>
+            <button onclick="copyPartyCode()" style="background:rgba(0,255,136,0.15);border:1px solid rgba(0,255,136,0.3);color:#00ff88;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;border-radius:4px;font-family:inherit">COPY</button>
+          </div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px">Share this code with friends</div>
+          <div id="party-members" style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:5px">Waiting for players... (1/4)</div>
+        </div>
+        <!-- Join code input (shown after clicking JOIN) -->
+        <div id="join-code-box" style="display:none;margin-top:8px">
+          <div style="display:flex;gap:6px">
+            <input id="join-code-input" maxlength="6" placeholder="ENTER CODE" spellcheck="false"
+              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 10px;font-size:14px;font-weight:700;border-radius:4px;font-family:monospace;letter-spacing:3px;text-transform:uppercase"
+              oninput="this.value=this.value.toUpperCase()">
+            <button onclick="joinPartyCode()" style="background:#f5c518;color:#000;border:none;padding:8px 12px;font-size:12px;font-weight:900;cursor:pointer;border-radius:4px;font-family:inherit">GO</button>
+          </div>
+          <div id="join-code-error" style="font-size:11px;color:#ff4444;margin-top:4px;display:none"></div>
+        </div>
+      </div>
+
+      <button id="lb-play-btn" onclick="beginCheckAndLoad()">PLAY</button>
+      <div id="lb-rank-row" onclick="openRankModal()">
+        <div id="lb-rank-icon">🐟</div>
+        <div id="lb-rank-info">
+          <div id="lb-rank-name">NEO NOOB</div>
+          <div id="lb-rank-xp">0 XP · tap to view rank</div>
+        </div>
+        <div style="color:rgba(255,255,255,0.3);font-size:14px">›</div>
+      </div>
+    </div>
+  </div>
+  <div id="lobby-carousel">
+    <div class="lc-item"><div class="lc-item-icon">⚔️</div><div class="lc-new">NEW</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🛡️</div></div>
+    <div class="lc-item"><div class="lc-item-icon">💥</div><div class="lc-new">NEW</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🔫</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🎯</div><div class="lc-new">NEW</div></div>
+    <div class="lc-item"><div class="lc-item-icon">👾</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🌌</div></div>
+    <div class="lc-item"><div class="lc-item-icon">⚡</div><div class="lc-new">NEW</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🏆</div></div>
+    <div class="lc-item"><div class="lc-item-icon">💎</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🔥</div><div class="lc-new">NEW</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🌀</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🎮</div></div>
+    <div class="lc-item"><div class="lc-item-icon">💜</div><div class="lc-new">NEW</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🧬</div></div>
+    <div class="lc-item"><div class="lc-item-icon">🌙</div></div>
+  </div>
+</div>
+
+<!-- CHECK SCREEN -->
+<div id="check-screen">
+  <div id="check-title">⚙ SYSTEM CHECK</div>
+  <div id="check-log"></div>
+  <div id="check-bar-wrap"><div id="check-bar"></div></div>
+  <div id="check-status">INITIALIZING...</div>
+</div>
+
+<!-- LOADING SCREEN -->
+<div id="loading-screen">
+  <div id="loading-art"><div id="load-entities"></div></div>
+  <div id="loading-bottom">
+    <div id="load-connecting">CONNECTING.</div>
+    <div id="load-bar-wrap"><div id="load-bar"></div></div>
+  </div>
+  <div id="load-tip-box">
+    <div id="load-tip-label">DID YOU KNOW</div>
+    <div id="load-tip-text"></div>
+  </div>
+  <button id="load-close-btn" onclick="finishLoading()">B &nbsp; CLOSE</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <strong id="hud-mode">PLAYLIST: SOLO</strong><br>
+  WASD: Move · Click/Hold: Shoot · R: Reload · T: Chat<br>
+  <div style="margin-top:7px">
+    SHIELD: <div class="bar-container"><div id="shield-bar" class="bar" style="background:#00aaff;width:100%"></div></div>
+    HULL:   <div class="bar-container"><div id="hull-bar"   class="bar" style="background:#00ff55;width:100%"></div></div>
+  </div><br>
+  <span id="weapon-display" style="color:#ffff00">[EXOTIC] PLASMA REPEATER</span><br>
+  <span id="ammo-display"   style="color:#00ffff;font-weight:bold">AMMO: 30</span><br>
+  <span id="score-display"  style="color:#ff00ff;font-weight:bold">KILLS: 0 / 30</span><br>
+  <span id="players-online" style="color:#aaaaaa;font-size:11px">Players: 1</span>
+</div>
+
+<!-- SCOREBOARD -->
+<div id="scoreboard">
+  <div style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:5px">SCOREBOARD</div>
+  <div id="sb-rows"></div>
+</div>
+
+<!-- CHAT -->
+<div id="chat-wrap">
+  <div id="chat-log"></div>
+  <div id="chat-input-row">
+    <input id="chat-input" placeholder="Press T to chat..." maxlength="120">
+  </div>
+</div>
+
+<!-- ALERTS -->
+<div id="loot-alert"></div>
+<div id="reload-hint">RELOADING...</div>
+
+<!-- RESULT -->
+<div id="result-screen">
+  <div class="rs-stats">
+    <div class="rs-stat"><div class="rs-stat-num" id="rs-placement">1</div><div class="rs-stat-label">PLACEMENT</div></div>
+    <div id="rs-ring-wrap">
+      <svg id="rs-ring-svg" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="ringGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#a0aaff"/><stop offset="100%" stop-color="#ffffff"/>
+        </linearGradient></defs>
+        <circle id="rs-ring-bg" cx="90" cy="90" r="81"/>
+        <circle id="rs-ring-fill" cx="90" cy="90" r="81"/>
+      </svg>
+      <div id="rs-ring-inner"><span id="rs-rank-icon-big">🐟</span></div>
+    </div>
+    <div class="rs-stat"><div class="rs-stat-num" id="rs-elims">0</div><div class="rs-stat-label">ELIMINATIONS</div></div>
+  </div>
+  <div class="rs-bottom">
+    <div id="rs-pct">0%</div>
+    <div id="rs-rankup-text">RANK UP!</div>
+    <div id="rs-rank-name-text">NEO NOOB</div>
+    <div id="rs-xp-earned">+0 XP EARNED</div>
+  </div>
+  <button id="rs-continue-btn" onclick="returnToLobby()">CONTINUE (5)</button>
+</div>
+
+<!-- RANK MODAL -->
+<div id="rank-modal">
+  <div id="rank-panel">
+    <div id="rank-title">⬡ RANK BOARD</div>
+    <div id="rank-subtitle">PERFORMANCE-BASED PROGRESSION</div>
+    <div id="rank-current-display">
+      <div id="rank-cur-icon">🐟</div>
+      <div id="rank-cur-name">NEO NOOB</div>
+      <div id="rank-cur-xp">XP: 0</div>
+    </div>
+    <div class="rank-list" id="rank-list"></div>
+    <button id="rank-close-btn" onclick="closeRankModal()">CLOSE</button>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+// ── CANVAS ──────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+// ── DOM ──────────────────────────────────────────────────────────
+const lobby       = document.getElementById('lobby');
+const checkScreen = document.getElementById('check-screen');
+const loadScreen  = document.getElementById('loading-screen');
+const hud         = document.getElementById('hud');
+const sbEl        = document.getElementById('scoreboard');
+const chatWrap    = document.getElementById('chat-wrap');
+const lootAlert   = document.getElementById('loot-alert');
+const reloadHint  = document.getElementById('reload-hint');
+const netStatus   = document.getElementById('net-status');
+const resultScreen= document.getElementById('result-screen');
+
+// ── RANK DATA ───────────────────────────────────────────────────
+const RANKS=[
+  {id:'neo_noob', name:'NEO NOOB',         icon:'🐟', xpRequired:0,     color:'#aaaaaa'},
+  {id:'creature', name:'PLAYABLE CREATURE', icon:'🦎', xpRequired:100,   color:'#00ff88'},
+  {id:'goldfish', name:'GOLDFISH',          icon:'🐠', xpRequired:300,   color:'#ffaa00'},
+  {id:'moonstar', name:'MOON STAR',         icon:'⭐', xpRequired:700,   color:'#00aaff'},
+  {id:'trex',     name:'RARE T-REX',        icon:'🦖', xpRequired:1500,  color:'#ff6600'},
+  {id:'birdyduck',name:'BIRDY DUCK',        icon:'🦆', xpRequired:3000,  color:'#ff00ff'},
+  {id:'nice',     name:'NICE.',             icon:'🌀', xpRequired:6900,  color:'#adff2f'},
+  {id:'bt',       name:'BT.',               icon:'👾', xpRequired:15000, color:'#ff0066'},
+];
+let playerXP    = parseInt(localStorage.getItem('neon_xp')    || '0');
+let gamesPlayed = parseInt(localStorage.getItem('neon_games') || '0');
+function saveXP(){ localStorage.setItem('neon_xp',playerXP); localStorage.setItem('neon_games',gamesPlayed); }
+function getCurrentRank(){ let r=RANKS[0]; for(const x of RANKS){ if(playerXP>=x.xpRequired) r=x; } return r; }
+function getNextRank(){ const r=getCurrentRank(); const i=RANKS.findIndex(x=>x.id===r.id); return i<RANKS.length-1?RANKS[i+1]:null; }
+function calcXP(kills,goal,won,mode){ const pct=Math.min(1,kills/goal); const mb={SOLO:1,DUOS:1.2,TRIOS:1.5,SQUADS:2.5}[mode]||1; let xp=Math.floor(pct*60*mb); if(won) xp+=Math.floor(40*mb); return Math.max(xp,2); }
+
+// ── GAME STATE ───────────────────────────────────────────────────
+const keys  = {};
+const mouse = { x:0, y:0, down:false };
+let myId    = null;
+let roomId  = null;
+let myMode  = 'SOLO';
+let myWinGoal = 30;
+let worldW  = 1280;
+let worldH  = 720;
+
+// Latest server snapshot
+let serverPlayers = [];
+let serverEnemies = [];
+let serverBullets = [];
+let serverScore   = 0;
+let myScore       = 0;
+
+let isGameActive  = false;
+let isGameOver    = false;
+let isVictory     = false;
+let isReloading   = false;
+let reloadTimer   = 0;
+let chatOpen      = false;
+let lootTimeout   = null;
+let resultCdTimer = null;
+
+// Local smoothed player position (client-side prediction)
+let localX = 0, localY = 0;
+let localPositionSnapped = false;
+let myAmmo = 30;
+let myShield = 100, myHull = 100;
+let myWeaponColor = '#00ffff';
+let myWeaponName  = '[EXOTIC] PLASMA REPEATER';
+
+// ── WEBSOCKET ────────────────────────────────────────────────────
+let ws = null;
+let wsReady = false;
+
+function connectWS(onReady){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url   = `${proto}://${location.host}`;
+  ws = new WebSocket(url);
+
+  ws.onopen = ()=>{
+    wsReady = true;
+    netStatus.className = 'show ok';
+    netStatus.innerText = '● CONNECTED';
+    if(onReady) onReady();
+  };
+
+  ws.onmessage = (e)=>{
+    let msg; try{ msg=JSON.parse(e.data); }catch{ return; }
+    handleServerMsg(msg);
+  };
+
+  ws.onclose = ()=>{
+    wsReady = false;
+    netStatus.className = 'show bad';
+    netStatus.innerText = '● DISCONNECTED';
+    if(isGameActive) setTimeout(()=>connectWS(), 2000);
+  };
+
+  ws.onerror = ()=>{ ws.close(); };
+}
+
+function send(obj){ if(ws && ws.readyState===1) ws.send(JSON.stringify(obj)); }
+
+function handleServerMsg(msg){
+  switch(msg.type){
+    case 'joined':
+      myId      = msg.playerId;
+      roomId    = msg.roomId;
+      myMode    = msg.mode;
+      myWinGoal = msg.winGoal;
+      worldW    = msg.worldW || 1280;
+      worldH    = msg.worldH || 720;
+      localX = worldW / 2;
+      localY = worldH / 2;
+      localPositionSnapped = false;
+      break;
+
+    case 'state': {
+      serverPlayers = msg.players || [];
+      serverEnemies = msg.enemies || [];
+      serverBullets = msg.bullets || [];
+      serverScore   = msg.score   || 0;
+      const me = serverPlayers.find(p=>p.id===myId);
+      if(me){
+        myShield = me.shield; myHull = me.hull; myAmmo = me.ammo;
+        myWeaponColor = me.weaponColor;
+        myScore = me.score;
+        if(!localPositionSnapped){
+          localX = me.x; localY = me.y;
+          localPositionSnapped = true;
+        } else {
+          localX += (me.x - localX) * 0.4;
+          localY += (me.y - localY) * 0.4;
+        }
+      }
+      updateHUD();
+      updateScoreboard();
+      break;
+    }
+    case 'partyCreated':
+      myPartyCode = msg.code;
+      document.getElementById('party-code-box').style.display = 'block';
+      document.getElementById('party-code-text').innerText = msg.code;
+      document.getElementById('party-members').innerText = 'Waiting for friends... (0/3 joined)';
+      withBots = msg.withBots;
+      setMode(msg.mode);
+      break;
+
+    case 'partyJoined':
+      myPartyCode = msg.code;
+      withBots = msg.withBots;
+      setWithBots(withBots);
+      setMode(msg.mode);
+      document.getElementById('party-code-box').style.display = 'block';
+      document.getElementById('party-code-text').innerText = msg.code;
+      document.getElementById('party-code-text').style.color = '#00c8ff';
+      document.getElementById('party-members').innerText = '✓ Joined! Waiting for leader to start...';
+      document.getElementById('lb-play-btn').style.display = 'none';
+      document.getElementById('join-code-box').style.display = 'none';
+      break;
+
+    case 'gameStart':
+      myId      = msg.playerId;
+      roomId    = msg.roomId;
+      myMode    = msg.mode;
+      myWinGoal = msg.winGoal;
+      worldW    = msg.worldW || 1280;
+      worldH    = msg.worldH || 720;
+      withBots  = msg.withBots;
+      localX    = worldW / 2;
+      localY    = worldH / 2;
+      localPositionSnapped = false;
+      document.getElementById('lb-play-btn').style.display = '';
+      enterGameFromParty();
+      break;
+
+    case 'partyError':
+      showJoinError(msg.msg || 'Error joining party.');
+      break;
+
+    case 'partyUpdate': {
+      const pmEl = document.getElementById('party-members');
+      if(pmEl) pmEl.innerText = `Players ready: ${msg.count}/4`;
+      const poEl = document.getElementById('players-online');
+      if(poEl) poEl.innerText = `Party: ${msg.count}/4 players`;
+      if(msg.friendName) showAlert(`⬡ ${msg.friendName} joined your party!`);
+      break;
+    }
+    case 'playerJoined':
+      showAlert(`⬡ ${msg.name} joined!`);
+      break;
+    case 'playerLeft':
+      showAlert(`${msg.id === myId ? 'You' : 'A player'} left.`);
+      break;
+    case 'playerDied':
+      if(msg.id === myId){ isGameOver=true; showResultScreen(false); }
+      break;
+    case 'victory':
+      isVictory=true; showResultScreen(true); playSorrySorry();
+      break;
+    case 'gameOver':
+      isGameOver=true; showResultScreen(false);
+      break;
+    case 'chat':
+      addChatMsg(msg.name, msg.text);
+      break;
+  }
+}
+
+// ── BOT TOGGLE ───────────────────────────────────────────────────
+let withBots = false;
+let myPartyCode = null;
+
+function setWithBots(val) {
+  withBots = val;
+  document.getElementById('tb-humans').style.background = val ? 'transparent' : '#f5c518';
+  document.getElementById('tb-humans').style.color      = val ? 'rgba(255,255,255,0.5)' : '#000';
+  document.getElementById('tb-bots').style.background   = val ? '#aa44ff' : 'transparent';
+  document.getElementById('tb-bots').style.color        = val ? '#fff' : 'rgba(255,255,255,0.5)';
+}
+
+// ── PARTY SYSTEM ─────────────────────────────────────────────────
+function createParty() {
+  if (!wsReady) { connectWS(() => createParty()); return; }
+  const name = document.getElementById('lb-name-input').value.trim() || 'NiceNick15';
+  send({ type:'createParty', mode:currentMode, withBots, name });
+  document.getElementById('join-code-box').style.display = 'none';
+}
+
+function showJoinParty() {
+  const jb = document.getElementById('join-code-box');
+  jb.style.display = jb.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('party-code-box').style.display = 'none';
+  document.getElementById('join-code-error').style.display = 'none';
+}
+
+function joinPartyCode() {
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (code.length !== 6) { showJoinError('Code must be 6 characters.'); return; }
+  const name = document.getElementById('lb-name-input').value.trim() || 'NiceNick15';
+  if (!wsReady) { connectWS(() => send({ type:'joinParty', code, name })); return; }
+  send({ type:'joinParty', code, name });
+}
+
+function showJoinError(msg) {
+  const el = document.getElementById('join-code-error');
+  el.innerText = msg; el.style.display = 'block';
+}
+
+function copyPartyCode() {
+  if (!myPartyCode) return;
+  const url = `${location.origin}?party=${myPartyCode}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target;
+    btn.innerText = 'COPIED!'; btn.style.background = 'rgba(0,255,136,0.35)';
+    setTimeout(() => { btn.innerText = 'COPY'; btn.style.background = 'rgba(0,255,136,0.15)'; }, 2000);
+  });
+}
+
+// Auto-join party from URL ?party=CODE
+function checkURLParty() {
+  const params = new URLSearchParams(location.search);
+  const code   = params.get('party');
+  if (code) {
+    document.getElementById('join-code-input').value = code.toUpperCase();
+    document.getElementById('join-code-box').style.display = 'block';
+    setTimeout(() => joinPartyCode(), 800);
+  }
+}
+
+
+let currentMode = 'SOLO';
+function setMode(m){
+  currentMode=m;
+  document.querySelectorAll('.lb-mode').forEach(b=>b.classList.remove('sel'));
+  const map={SOLO:'lmo-solo',DUOS:'lmo-duos',TRIOS:'lmo-trios',SQUADS:'lmo-quads'};
+  const el=document.getElementById(map[m]); if(el) el.classList.add('sel');
+}
+
+// ── CHECK + LOAD ──────────────────────────────────────────────────
+const CHECK_STEPS=[
+  {msg:'[OK] Validating game assets...',ms:400},
+  {msg:'[OK] Checking network connection...',ms:900},
+  {msg:'[OK] Connecting to server...',ms:1500},
+  {msg:'[OK] Loading weapon configs...',ms:2100},
+  {msg:'[OK] Verifying rank data...',ms:2800},
+  {msg:'[OK] Compiling AI scripts...',ms:3500},
+  {msg:'[OK] Scanning for errors...',ms:4300},
+  {msg:'[OK] Checking audio...',ms:5100},
+  {msg:'[OK] All systems nominal.',ms:6200},
+  {msg:'[LAUNCH] Finding match...',ms:7200},
+  {msg:'[LAUNCH] Server allocated. GO!',ms:8800},
+];
+const TIPS=[
+  'Purple Chaos Chests make enemies fight each other!',
+  'Mystery chests hide a random weapon inside — no peeking.',
+  'Press R to reload. Running dry auto-reloads too.',
+  'Squads mode gives 2.5× XP. Rank up fast.',
+  'Shield does NOT regenerate. Save your Shield Cans.',
+  'The Sniper pierces through multiple enemies. Line them up.',
+  'Teammates orbit you and target the nearest enemy.',
+  'Press 1 for Medkit, 2 for Shield mid-fight.',
+  'Nuclear Blast Wave has 160px splash radius. Use it on clusters.',
+  'Shotgun fires 5 pellets — deadly up close.',
+];
+const ENTITY_ART=[
+  {e:'🌌',x:'8%',y:'3%',s:'88px',o:.65},{e:'👾',x:'73%',y:'6%',s:'78px',o:.8},
+  {e:'🛸',x:'53%',y:'12%',s:'68px',o:.55},{e:'🧬',x:'17%',y:'57%',s:'98px',o:.5},
+  {e:'⚡',x:'83%',y:'51%',s:'78px',o:.7},{e:'🌀',x:'59%',y:'67%',s:'88px',o:.4},
+  {e:'💫',x:'33%',y:'17%',s:'58px',o:.6},{e:'🔮',x:'3%',y:'37%',s:'73px',o:.5},
+  {e:'🚀',x:'45%',y:'4%',s:'53px',o:.5},{e:'☄️',x:'87%',y:'29%',s:'63px',o:.6},
+];
+
+function beginCheckAndLoad(){
+  // Party leader — send startParty and WAIT for server to send gameStart back
+  if(myPartyCode){
+    const name = document.getElementById('lb-name-input').value.trim() || 'NiceNick15';
+    if(!wsReady){ connectWS(()=>send({type:'startParty', name})); }
+    else send({type:'startParty', name});
+    return;
+  }
+  // Normal public matchmaking — run check + load screens
+  lobby.style.display='none';
+  checkScreen.classList.add('open');
+  const log=document.getElementById('check-log');
+  const bar=document.getElementById('check-bar');
+  const status=document.getElementById('check-status');
+  log.innerText=''; bar.style.width='0%'; status.innerText='RUNNING CHECKS...';
+  CHECK_STEPS.forEach((s,i)=>{
+    setTimeout(()=>{
+      log.innerText+=(i>0?'\n':'')+s.msg;
+      log.scrollTop=log.scrollHeight;
+      bar.style.width=Math.round((i+1)/CHECK_STEPS.length*100)+'%';
+      if(i===CHECK_STEPS.length-1){
+        status.innerText='✓ ALL CHECKS PASSED';
+        setTimeout(()=>{ checkScreen.classList.remove('open'); startLoadingScreen(); },600);
+      }
+    },s.ms);
+  });
+}
+
+function startLoadingScreen(){
+  const ent=document.getElementById('load-entities');
+  ent.innerHTML='';
+  ENTITY_ART.forEach(e=>{
+    const d=document.createElement('div');
+    d.style.cssText=`position:absolute;left:${e.x};top:${e.y};font-size:${e.s};opacity:${e.o};filter:drop-shadow(0 0 22px rgba(120,60,255,0.7));transition:transform 4s ease-in-out`;
+    d.innerText=e.e; ent.appendChild(d);
+    setTimeout(()=>{ d.style.transform=`translateY(${Math.random()>.5?'-':'+'}${10+Math.random()*18}px)`; },100);
+  });
+  const tipEl=document.getElementById('load-tip-text');
+  tipEl.innerText=TIPS[Math.floor(Math.random()*TIPS.length)];
+  // Try AI tip
+  fetchAITip(tipEl);
+
+  loadScreen.classList.add('open');
+  document.getElementById('load-bar').style.width='0%';
+  document.getElementById('load-close-btn').classList.remove('show');
+
+  let dots=1;
+  const dotI=setInterval(()=>{ dots=(dots%3)+1; document.getElementById('load-connecting').innerText='CONNECTING'+'.'.repeat(dots); },500);
+  let pct=0;
+  const barI=setInterval(()=>{ pct=Math.min(pct+Math.random()*7+2,92); document.getElementById('load-bar').style.width=pct+'%'; },280);
+
+  setTimeout(()=>{
+    clearInterval(dotI); clearInterval(barI);
+    document.getElementById('load-connecting').innerText='READY TO PLAY';
+    document.getElementById('load-bar').style.width='100%';
+    document.getElementById('load-close-btn').classList.add('show');
+  },5000);
+}
+
+async function fetchAITip(el){
+  try{
+    const r=await fetch('/api/tip',{method:'GET'});
+    const d=await r.json();
+    if(d.tip) el.innerText=d.tip;
+  }catch{}
+}
+
+function finishLoading(){
+  loadScreen.classList.remove('open');
+  launchGame();
+}
+
+function enterGameFromParty(){
+  if(isGameActive) return; // already in game, don't double-start
+  lobby.style.display = 'none';
+  checkScreen.classList.remove('open');
+  loadScreen.classList.remove('open');
+  isGameActive = true; isGameOver = false; isVictory = false;
+  hud.classList.add('show');
+  sbEl.classList.add('show');
+  chatWrap.classList.add('show');
+  netStatus.classList.add('show');
+  document.getElementById('hud-mode').innerText = 'PLAYLIST: ' + myMode + ' · PARTY';
+  const poEl = document.getElementById('players-online');
+  if(poEl && myPartyCode) poEl.innerText = `Party: ${myPartyCode}`;
+  requestAnimationFrame(gameLoop);
+}
+
+function launchGame(){
+  const name=document.getElementById('lb-name-input').value.trim()||'NiceNick15';
+  isGameActive=true; isGameOver=false; isVictory=false;
+  localPositionSnapped = false;
+  hud.classList.add('show');
+  sbEl.classList.add('show');
+  chatWrap.classList.add('show');
+  netStatus.classList.add('show');
+  document.getElementById('hud-mode').innerText='PLAYLIST: '+currentMode;
+  if(!wsReady){
+    connectWS(()=>{ send({type:'join', mode:currentMode, name, withBots}); });
+  } else {
+    send({type:'join', mode:currentMode, name, withBots});
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// ── INPUT ────────────────────────────────────────────────────────
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  keys[k]=true;
+  if(!isGameActive||isGameOver||isVictory) return;
+  if(k==='t'&&!chatOpen){ openChat(); return; }
+  if(k==='enter'&&chatOpen){ sendChat(); return; }
+  if(k==='escape'&&chatOpen){ closeChat(); return; }
+  if(chatOpen) return;
+  if(k==='r'&&!isReloading){ startReload(); }
+});
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
+window.addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
+window.addEventListener('mousedown', e=>{ if(e.button===0) mouse.down=true; });
+window.addEventListener('mouseup',   e=>{ if(e.button===0) mouse.down=false; });
+
+function openChat(){
+  chatOpen=true;
+  const ci=document.getElementById('chat-input');
+  ci.classList.add('open'); ci.value=''; ci.focus();
+}
+function closeChat(){
+  chatOpen=false;
+  const ci=document.getElementById('chat-input');
+  ci.classList.remove('open'); ci.blur();
+}
+function sendChat(){
+  const ci=document.getElementById('chat-input');
+  const text=ci.value.trim();
+  if(text) send({type:'chat', text});
+  closeChat();
+}
+
+function addChatMsg(name,text){
+  const log=document.getElementById('chat-log');
+  const d=document.createElement('div');
+  d.className='chat-msg';
+  d.innerHTML=`<span style="color:#00ffcc;font-weight:bold">${name}:</span> ${text}`;
+  log.appendChild(d);
+  if(log.children.length>8) log.removeChild(log.firstChild);
+  setTimeout(()=>{ if(d.parentNode) d.parentNode.removeChild(d); },8000);
+}
+
+// ── RELOAD ───────────────────────────────────────────────────────
+function startReload(){
+  if(isReloading||currentMode==='SQUADS') return;
+  isReloading=true; reloadTimer=1.5;
+  reloadHint.style.display='block';
+}
+function tickReload(dt){
+  if(!isReloading) return;
+  reloadTimer-=dt;
+  reloadHint.innerText='RELOADING... '+Math.ceil(reloadTimer)+'s';
+  if(reloadTimer<=0){
+    isReloading=false; reloadHint.style.display='none';
+    myAmmo=30; send({type:'input', reload:true});
+    updateHUD();
+  }
+}
+
+// ── INPUT LOOP → send to server ──────────────────────────────────
+let inputInterval=null;
+function startInputLoop(){
+  if(inputInterval) clearInterval(inputInterval);
+  inputInterval=setInterval(()=>{
+    if(!isGameActive||!wsReady||chatOpen) return;
+    let dx=0,dy=0;
+    if(keys['w']||keys['arrowup'])   dy-=1;
+    if(keys['s']||keys['arrowdown']) dy+=1;
+    if(keys['a']||keys['arrowleft']) dx-=1;
+    if(keys['d']||keys['arrowright'])dx+=1;
+    // map mouse to world coords
+    const scaleX=worldW/canvas.width, scaleY=worldH/canvas.height;
+    const worldMouseX=mouse.x*scaleX, worldMouseY=mouse.y*scaleY;
+    send({type:'input', dx, dy, mouseX:worldMouseX, mouseY:worldMouseY, shooting:mouse.down&&myAmmo>0&&!isReloading});
+    if(mouse.down&&myAmmo>0&&!isReloading){ myAmmo=Math.max(0,myAmmo-0.15); if(myAmmo<=0) startReload(); }
+  },50);
+}
+
+// ── HUD UPDATE ───────────────────────────────────────────────────
+function updateHUD(){
+  document.getElementById('shield-bar').style.width=(myShield)+'%';
+  document.getElementById('hull-bar').style.width=(myHull)+'%';
+  document.getElementById('ammo-display').innerText='AMMO: '+Math.ceil(myAmmo);
+  document.getElementById('score-display').innerText='KILLS: '+serverScore+' / '+myWinGoal;
+  document.getElementById('players-online').innerText='Players in room: '+serverPlayers.length;
+}
+
+function updateScoreboard(){
+  const rows=document.getElementById('sb-rows');
+  rows.innerHTML='';
+  [...serverPlayers].sort((a,b)=>b.score-a.score).forEach(p=>{
+    const d=document.createElement('div');
+    d.className='sb-row'+(p.id===myId?' sb-you':'');
+    d.innerHTML=`<span>${p.alive?'🟢':'💀'}</span><span style="flex:1">${p.name}</span><span>${p.score}</span>`;
+    rows.appendChild(d);
+  });
+}
+
+function showAlert(text){
+  if(lootTimeout) clearTimeout(lootTimeout);
+  lootAlert.innerText=text; lootAlert.style.display='block';
+  lootTimeout=setTimeout(()=>{ lootAlert.style.display='none'; },2200);
+}
+
+// ── RESULT SCREEN ─────────────────────────────────────────────────
+function showResultScreen(won){
+  isGameActive=false;
+  startInputLoop(); // stop input loop
+  clearInterval(inputInterval); inputInterval=null;
+
+  const rankBefore=getCurrentRank();
+  const xpGain=calcXP(myScore,myWinGoal,won,currentMode);
+  playerXP+=xpGain; gamesPlayed++; saveXP();
+  const rankAfter=getCurrentRank();
+  const rankedUp=rankAfter.id!==rankBefore.id;
+  const next=getNextRankData();
+
+  const CIRC=2*Math.PI*81;
+  let pct=100;
+  if(next){ const band=next.xpRequired-rankAfter.xpRequired; const into=playerXP-rankAfter.xpRequired; pct=Math.min(100,Math.round(into/band*100)); }
+
+  document.getElementById('rs-placement').innerText=won?1:Math.floor(Math.random()*8)+2;
+  document.getElementById('rs-elims').innerText=myScore;
+  document.getElementById('rs-rank-icon-big').innerText=rankAfter.icon;
+  document.getElementById('rs-pct').innerText=pct+'%';
+  document.getElementById('rs-rank-name-text').innerText=rankAfter.name;
+  document.getElementById('rs-rank-name-text').style.color=rankAfter.color;
+  document.getElementById('rs-xp-earned').innerText='+'+xpGain+' XP  ·  TOTAL '+playerXP.toLocaleString()+' XP';
+  document.getElementById('rs-rankup-text').style.display=rankedUp?'block':'none';
+
+  const grad=document.getElementById('ringGrad2');
+  if(grad){ grad.children[0].setAttribute('stop-color',rankAfter.color); }
+
+  document.getElementById('rs-ring-fill').style.strokeDashoffset='508';
+  resultScreen.classList.add('open');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    document.getElementById('rs-ring-fill').style.strokeDashoffset=CIRC-(pct/100)*CIRC;
+  }));
+
+  let cd=5;
+  const btn=document.getElementById('rs-continue-btn');
+  btn.innerText='CONTINUE ('+cd+')';
+  if(resultCdTimer) clearInterval(resultCdTimer);
+  resultCdTimer=setInterval(()=>{ cd--; if(cd<=0){ clearInterval(resultCdTimer); returnToLobby(); } else btn.innerText='CONTINUE ('+cd+')'; },1000);
+  updateLobbyBadge();
+}
+
+function getNextRankData(){ return getNextRank(); }
+
+function returnToLobby(){
+  isGameActive=false; isGameOver=false; isVictory=false;
+  if(resultCdTimer){ clearInterval(resultCdTimer); resultCdTimer=null; }
+  stopVictoryMusic();
+  resultScreen.classList.remove('open');
+  hud.classList.remove('show'); sbEl.classList.remove('show'); chatWrap.classList.remove('show');
+  reloadHint.style.display='none'; isReloading=false;
+  lobby.style.display='flex';
+  updateLobbyBadge();
+  // Reset party UI
+  myPartyCode = null;
+  document.getElementById('lb-play-btn').style.display = '';
+  document.getElementById('party-code-box').style.display = 'none';
+  document.getElementById('party-code-text').style.color = '#00ff88';
+  document.getElementById('party-members').innerText = 'Waiting for friends...';
+}
+
+// ── LOBBY BADGE ──────────────────────────────────────────────────
+function updateLobbyBadge(){
+  const r=getCurrentRank(); const next=getNextRank();
+  const icon=document.getElementById('lb-rank-icon');
+  const name=document.getElementById('lb-rank-name');
+  const xpEl=document.getElementById('lb-rank-xp');
+  const lvlEl=document.getElementById('lb-lvl');
+  if(icon) icon.innerText=r.icon;
+  if(name){ name.innerText=r.name; name.style.color=r.color; }
+  if(xpEl) xpEl.innerText=playerXP.toLocaleString()+' XP'+(next?' · '+(next.xpRequired-playerXP)+' to next':' · MAX');
+  if(lvlEl) lvlEl.innerText=gamesPlayed;
+}
+
+// ── RANK MODAL ────────────────────────────────────────────────────
+function openRankModal(){
+  const r=getCurrentRank(); const next=getNextRank();
+  document.getElementById('rank-cur-icon').innerText=r.icon;
+  document.getElementById('rank-cur-name').innerText=r.name;
+  document.getElementById('rank-cur-name').style.color=r.color;
+  document.getElementById('rank-cur-xp').innerText='XP: '+playerXP.toLocaleString()+(next?' · '+( next.xpRequired-playerXP)+' to next':' · MAX RANK');
+  const list=document.getElementById('rank-list'); list.innerHTML='';
+  RANKS.forEach(rank=>{
+    const isCur=rank.id===r.id, isAch=playerXP>=rank.xpRequired&&!isCur, isLock=playerXP<rank.xpRequired;
+    const row=document.createElement('div'); row.className='rank-row'+(isCur?' current':isAch?' achieved':'');
+    let prog=''; if(isCur&&next){ const pct=Math.min(100,Math.round((playerXP-rank.xpRequired)/(next.xpRequired-rank.xpRequired)*100)); prog=`<div class="rank-xp-bar-wrap"><div class="rank-xp-bar" style="width:${pct}%"></div></div>`; }
+    const badgeCls=isCur?'active':isAch?'unlocked':'locked';
+    const badgeTxt=isCur?'YOU ARE HERE':isAch?'✓':rank.xpRequired.toLocaleString()+' XP';
+    row.innerHTML=`<div class="rank-icon">${rank.icon}</div><div class="rank-info"><div class="rank-name" style="color:${isCur||isAch?rank.color:'#443344'}">${rank.name}</div>${prog}</div><div class="rank-badge ${badgeCls}">${badgeTxt}</div>`;
+    list.appendChild(row);
+  });
+  document.getElementById('rank-modal').classList.add('open');
+}
+function closeRankModal(){ document.getElementById('rank-modal').classList.remove('open'); }
+
+// ── AUDIO ─────────────────────────────────────────────────────────
+let audioCtx=null,victorySources=[];
+function stopVictoryMusic(){ victorySources.forEach(s=>{try{s.stop();}catch{}}); victorySources=[]; }
+function playSorrySorry(){
+  stopVictoryMusic();
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  const N={G4:392,E4:329.63,D4:293.66,B4:493.88,A4:440,Fs4:369.99,Cs5:554.37,D5:587.33,R:0};
+  const BPM=120,BEAT=60/BPM,E8=BEAT/2;
+  const mel=[[N.G4,1],[N.G4,1],[N.G4,1],[N.E4,2],[N.R,1],[N.D4,1],[N.D4,1],[N.D4,1],[N.B4,2],[N.R,1],[N.A4,1],[N.A4,1],[N.A4,1],[N.Fs4,2],[N.R,1],[N.E4,4],[N.R,2],[N.G4,1],[N.G4,1],[N.G4,1],[N.E4,2],[N.R,1],[N.D4,1],[N.D4,1],[N.D4,1],[N.B4,2],[N.R,1],[N.A4,1],[N.A4,1],[N.Cs5,1],[N.D5,3],[N.R,1],[N.G4,4],[N.R,2]];
+  const master=audioCtx.createGain(); master.gain.setValueAtTime(0.15,audioCtx.currentTime); master.connect(audioCtx.destination);
+  const loopDur=mel.reduce((s,[,d])=>s+d,0)*E8;
+  function mk(freq,start,dur,type,vol){ if(!freq) return; const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type=type; o.frequency.setValueAtTime(freq,start); g.gain.setValueAtTime(0,start); g.gain.linearRampToValueAtTime(vol,start+0.01); g.gain.setValueAtTime(vol,start+dur-0.04); g.gain.linearRampToValueAtTime(0,start+dur); o.connect(g); g.connect(master); o.start(start); o.stop(start+dur+0.05); victorySources.push(o); }
+  for(let l=0;l<30;l++){ const off=audioCtx.currentTime+l*loopDur; let t=off; mel.forEach(([f,e])=>{ mk(f,t,e*E8*0.88,'square',0.5); t+=e*E8; }); }
+}
+
+// ── RENDER ────────────────────────────────────────────────────────
+let lastRender=0;
+function gameLoop(ts){
+  if(!isGameActive) return;
+  const dt=Math.min((ts-lastRender)/1000,0.1); lastRender=ts;
+  tickReload(dt);
+  drawFrame();
+  requestAnimationFrame(gameLoop);
+}
+
+// scale world → canvas
+function wx(x){ return (x/worldW)*canvas.width; }
+function wy(y){ return (y/worldH)*canvas.height; }
+function wr(r){ return (r/worldW)*canvas.width; }
+
+function drawFrame(){
+  ctx.fillStyle='#05050a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  // grid
+  ctx.strokeStyle='#101020'; ctx.lineWidth=1;
+  const gs=50, gsw=wx(gs), gsh=wy(gs);
+  for(let x=0;x<canvas.width;x+=gsw){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
+  for(let y=0;y<canvas.height;y+=gsh){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+
+  // enemies
+  ctx.fillStyle='#ff0055'; ctx.shadowBlur=8; ctx.shadowColor='#ff0055';
+  serverEnemies.forEach(e=>{
+    const cx=wx(e.x),cy=wy(e.y),cr=wr(e.r);
+    const a=Math.atan2(wy(localY)-cy,wx(localX)-cx);
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*cr,           cy+Math.sin(a)*cr);
+    ctx.lineTo(cx+Math.cos(a+2.4)*cr,       cy+Math.sin(a+2.4)*cr);
+    ctx.lineTo(cx+Math.cos(a-2.4)*cr,       cy+Math.sin(a-2.4)*cr);
+    ctx.closePath(); ctx.fill();
+  });
+  ctx.shadowBlur=0;
+
+  // bullets
+  serverBullets.forEach(b=>{
+    ctx.fillStyle=b.isNuclear?'#adff2f':'#00ffff';
+    if(b.isNuclear){ ctx.shadowBlur=12; ctx.shadowColor='#adff2f'; }
+    ctx.beginPath(); ctx.arc(wx(b.x),wy(b.y),wr(b.size),0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+  });
+
+  // other players
+  serverPlayers.forEach(p=>{
+    if(p.id===myId) return;
+    const px=wx(p.x),py=wy(p.y),pr=wr(p.r);
+    ctx.strokeStyle=p.alive?p.weaponColor:'#444'; ctx.lineWidth=2;
+    ctx.shadowBlur=p.alive?10:0; ctx.shadowColor=p.weaponColor;
+    ctx.beginPath(); ctx.arc(px,py,pr,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
+    // name tag
+    ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='bold 10px monospace'; ctx.textAlign='center';
+    ctx.fillText(p.name,px,py-pr-4); ctx.textAlign='left';
+  });
+
+  // local player (client-side smooth position)
+  ctx.strokeStyle=myWeaponColor; ctx.lineWidth=3;
+  ctx.shadowBlur=15; ctx.shadowColor=myWeaponColor;
+  ctx.beginPath(); ctx.arc(wx(localX),wy(localY),wr(14),0,Math.PI*2); ctx.stroke();
+  ctx.shadowBlur=0;
+}
+
+// ── INIT ────────────────────────────────────────────────────────
+updateLobbyBadge();
+checkURLParty();
+startInputLoop();
+connectWS(); // pre-connect in background
+</script>
+</body>
+</html>
