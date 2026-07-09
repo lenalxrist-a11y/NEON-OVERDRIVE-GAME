@@ -190,6 +190,44 @@ canvas{display:block;position:fixed;top:0;left:0;width:100vw;height:100vh;z-inde
         <label>YOUR NAME</label>
         <input id="lb-name-input" maxlength="20" value="NiceNick15" spellcheck="false">
       </div>
+
+      <!-- BOT / HUMAN TOGGLE -->
+      <div style="padding:8px 18px 0;display:flex;align-items:center;gap:8px">
+        <div id="lb-toggle-wrap" style="display:flex;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;overflow:hidden;flex:1">
+          <button id="tb-humans" onclick="setWithBots(false)" style="flex:1;padding:7px 4px;font-size:11px;font-weight:700;letter-spacing:1px;border:none;cursor:pointer;font-family:inherit;background:#f5c518;color:#000;transition:0.15s">👥 HUMANS</button>
+          <button id="tb-bots"   onclick="setWithBots(true)"  style="flex:1;padding:7px 4px;font-size:11px;font-weight:700;letter-spacing:1px;border:none;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.5);transition:0.15s">🤖 WITH BOTS</button>
+        </div>
+      </div>
+
+      <!-- PARTY SECTION -->
+      <div style="padding:10px 18px 0">
+        <div style="font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-bottom:6px">PARTY</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="createParty()" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:8px 4px;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:5px;font-family:inherit;transition:0.15s" onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.07)'">＋ CREATE</button>
+          <button onclick="showJoinParty()" style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;padding:8px 4px;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:5px;font-family:inherit;transition:0.15s" onmouseover="this.style.background='rgba(255,255,255,0.14)'" onmouseout="this.style.background='rgba(255,255,255,0.07)'">⬡ JOIN</button>
+        </div>
+        <!-- Party code display (shown after creating) -->
+        <div id="party-code-box" style="display:none;margin-top:8px;background:rgba(0,200,100,0.08);border:1px solid rgba(0,200,100,0.3);border-radius:6px;padding:9px 12px">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:3px">YOUR PARTY CODE</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div id="party-code-text" style="font-size:22px;font-weight:900;color:#00ff88;letter-spacing:4px;font-family:monospace">------</div>
+            <button onclick="copyPartyCode()" style="background:rgba(0,255,136,0.15);border:1px solid rgba(0,255,136,0.3);color:#00ff88;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;border-radius:4px;font-family:inherit">COPY</button>
+          </div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px">Share this code with friends</div>
+          <div id="party-members" style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:5px">Waiting for players... (1/4)</div>
+        </div>
+        <!-- Join code input (shown after clicking JOIN) -->
+        <div id="join-code-box" style="display:none;margin-top:8px">
+          <div style="display:flex;gap:6px">
+            <input id="join-code-input" maxlength="6" placeholder="ENTER CODE" spellcheck="false"
+              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 10px;font-size:14px;font-weight:700;border-radius:4px;font-family:monospace;letter-spacing:3px;text-transform:uppercase"
+              oninput="this.value=this.value.toUpperCase()">
+            <button onclick="joinPartyCode()" style="background:#f5c518;color:#000;border:none;padding:8px 12px;font-size:12px;font-weight:900;cursor:pointer;border-radius:4px;font-family:inherit">GO</button>
+          </div>
+          <div id="join-code-error" style="font-size:11px;color:#ff4444;margin-top:4px;display:none"></div>
+        </div>
+      </div>
+
       <button id="lb-play-btn" onclick="beginCheckAndLoad()">PLAY</button>
       <div id="lb-rank-row" onclick="openRankModal()">
         <div id="lb-rank-icon">🐟</div>
@@ -450,6 +488,29 @@ function handleServerMsg(msg){
       updateScoreboard();
       break;
 
+    case 'partyCreated':
+      myPartyCode = msg.code;
+      document.getElementById('party-code-box').style.display = 'block';
+      document.getElementById('party-code-text').innerText = msg.code;
+      document.getElementById('party-members').innerText = 'Waiting for players... (1/4)';
+      break;
+    case 'partyJoined':
+      myPartyCode = msg.code;
+      document.getElementById('join-code-box').style.display  = 'none';
+      document.getElementById('party-code-box').style.display = 'block';
+      document.getElementById('party-code-text').innerText    = msg.code;
+      document.getElementById('party-code-text').style.color  = '#00c8ff';
+      document.getElementById('party-members').innerText      = 'Joined party! Ready to play.';
+      withBots = msg.withBots;
+      setWithBots(withBots);
+      break;
+    case 'partyError':
+      showJoinError(msg.msg || 'Error joining party.');
+      break;
+    case 'partyUpdate':
+      const pm = document.getElementById('party-members');
+      if (pm) pm.innerText = `Players in party: ${msg.count}/${msg.max}`;
+      break;
     case 'playerJoined':
       showAlert(`⬡ ${msg.name} joined!`);
       break;
@@ -471,7 +532,66 @@ function handleServerMsg(msg){
   }
 }
 
-// ── MODE ─────────────────────────────────────────────────────────
+// ── BOT TOGGLE ───────────────────────────────────────────────────
+let withBots = false;
+let myPartyCode = null;
+
+function setWithBots(val) {
+  withBots = val;
+  document.getElementById('tb-humans').style.background = val ? 'transparent' : '#f5c518';
+  document.getElementById('tb-humans').style.color      = val ? 'rgba(255,255,255,0.5)' : '#000';
+  document.getElementById('tb-bots').style.background   = val ? '#aa44ff' : 'transparent';
+  document.getElementById('tb-bots').style.color        = val ? '#fff' : 'rgba(255,255,255,0.5)';
+}
+
+// ── PARTY SYSTEM ─────────────────────────────────────────────────
+function createParty() {
+  if (!wsReady) { connectWS(() => createParty()); return; }
+  send({ type:'createParty', mode:currentMode, withBots });
+  document.getElementById('join-code-box').style.display = 'none';
+}
+
+function showJoinParty() {
+  const jb = document.getElementById('join-code-box');
+  jb.style.display = jb.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('party-code-box').style.display = 'none';
+  document.getElementById('join-code-error').style.display = 'none';
+}
+
+function joinPartyCode() {
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if (code.length !== 6) { showJoinError('Code must be 6 characters.'); return; }
+  if (!wsReady) { connectWS(() => send({ type:'joinParty', code })); return; }
+  send({ type:'joinParty', code });
+}
+
+function showJoinError(msg) {
+  const el = document.getElementById('join-code-error');
+  el.innerText = msg; el.style.display = 'block';
+}
+
+function copyPartyCode() {
+  if (!myPartyCode) return;
+  const url = `${location.origin}?party=${myPartyCode}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target;
+    btn.innerText = 'COPIED!'; btn.style.background = 'rgba(0,255,136,0.35)';
+    setTimeout(() => { btn.innerText = 'COPY'; btn.style.background = 'rgba(0,255,136,0.15)'; }, 2000);
+  });
+}
+
+// Auto-join party from URL ?party=CODE
+function checkURLParty() {
+  const params = new URLSearchParams(location.search);
+  const code   = params.get('party');
+  if (code) {
+    document.getElementById('join-code-input').value = code.toUpperCase();
+    document.getElementById('join-code-box').style.display = 'block';
+    setTimeout(() => joinPartyCode(), 800);
+  }
+}
+
+
 let currentMode = 'SOLO';
 function setMode(m){
   currentMode=m;
@@ -587,9 +707,9 @@ function launchGame(){
   netStatus.classList.add('show');
   document.getElementById('hud-mode').innerText='PLAYLIST: '+currentMode;
   if(!wsReady){
-    connectWS(()=>{ send({type:'join', mode:currentMode, name}); });
+    connectWS(()=>{ send({type:'join', mode:currentMode, name, withBots}); });
   } else {
-    send({type:'join', mode:currentMode, name});
+    send({type:'join', mode:currentMode, name, withBots});
   }
   requestAnimationFrame(gameLoop);
 }
@@ -870,6 +990,7 @@ function drawFrame(){
 
 // ── INIT ────────────────────────────────────────────────────────
 updateLobbyBadge();
+checkURLParty();
 startInputLoop();
 connectWS(); // pre-connect in background
 </script>
